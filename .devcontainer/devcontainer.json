@@ -1,22 +1,29 @@
 {
     "name": "python environment",
+
     "dockerComposeFile": "compose.yaml",
     "shutdownAction": "stopCompose",
     "service": "jupyter",
-    "remoteUser": "jovyan",
-    "features": {
-        "ghcr.io/duduribeiro/devcontainer-features/neovim:1": {},
-        "ghcr.io/nils-geistmann/devcontainers-features/zsh:0": {},
-        "ghcr.io/devcontainers/features/rust:1": {}
+    "overrideCommand": false,
+    "forwardPorts": [8888],
+    "portsAttributes": {
+        "8888": {
+            "label": "Jupyter",
+            "requireLocalPort": true,
+            "onAutoForward": "ignore"
+        }
     },
-    "forwardPorts": [
-        8888
-    ],
-    "postCreateCommand": "python -m pip install --upgrade pip && pip install -r /home/jovyan/requirements.txt",
-    "mounts": [
-        "source=${localEnv:HOME}/.config/nvim,target=/home/jovyan/.config/nvim,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.zshrc,target=/home/jovyan/.zshrc,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.p10k.zsh,target=/home/jovyan/.p10k.zsh,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.cache/wal,target=/home/jovyan/.cache/wal,type=bind,consistency=cached"
-    ]
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/conda/bin/python"
+			},
+			"extensions": ["ms-python.python", "ms-toolsai.jupyter"]
+		}
+	},
+    "features": {
+        "ghcr.io/nils-geistmann/devcontainers-features/zsh:0": {},
+        "ghcr.io/duduribeiro/devcontainer-features/neovim:1": {}
+    },
+    "postCreateCommand": "python -m pip install --upgrade pip && pip install -r /workspace/requirements.txt"
 }

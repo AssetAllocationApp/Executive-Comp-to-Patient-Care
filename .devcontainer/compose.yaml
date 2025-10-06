@@ -1,18 +1,15 @@
+version: "3"
 services:
   jupyter:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
-    working_dir: /home/jovyan
     environment:
-      PYTHONPATH: /home/jovyan
+      PYTHONPATH: /workspace
       JUPYTER_TOKEN: dev
     volumes:
-      - ..:/home/jovyan
-      - pip-cache:/home/jovyan/.cache/pip
+      - ..:/workspace
       - ./jupyter_server_config.py:/etc/jupyter/jupyter_server_config.py:ro
     ports:
       - 8888:8888
     command: sleep infinity
-volumes:
-  pip-cache: {}

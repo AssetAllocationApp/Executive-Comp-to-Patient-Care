@@ -1,5 +1,6 @@
 import numpy as np
 import xml.etree.ElementTree as ET
+from typing import TypedDict, Literal, Optional
 import zipfile
 import requests
 import os
@@ -398,7 +399,7 @@ def clean_990(df_990, year, min_rev, max_rev):
         'Bonus_Total'
     ]]
 
-    df_990['incentive_perc'] = df_990.apply(lambda r: r['TotalComp_AllIn'] / r['Bonus_Total'] if r['Bonus_Total'] > 0 else 0, axis = 1)
+    df_990['incentive_perc'] = df_990.apply(lambda r: r['Bonus_Total'] / r['TotalComp_AllIn'] if r['TotalComp_AllIn'] > 0 else 0, axis = 1)
     df_990['op_margin'] = df_990.apply(lambda r: (r['revenue'] - r['expenses']) / r['revenue'] if r['revenue'] > 0 else 0, axis = 1)
     df_990 = df_990[(df_990['revenue'] >= min_rev) & (df_990['revenue'] <= max_rev)]
     return df_990
@@ -507,3 +508,211 @@ def get_bridge_file():
 
 def get_healthcare_system():
     return pd.read_csv("./data/health_system.csv", encoding="cp1252")
+
+
+
+class Opts(TypedDict):
+    region_pivot: Literal['None', 'Region', 'Division']
+    healthcare_system_pivot: bool
+    healthcare_system_pivot_small_system_size_cutoff: int
+        
+def join_datasets(tax_year,
+                  min_hospital_rev,
+                  max_hospital_rev,
+                  cms_root_path,
+                  cost_report_path,
+                  columns = None,
+                  opts: Opts = None,
+                  incentive_perc_limit: Optional[int] = None
+                 ):
+    rename_cols = True
+    if opts is None:
+        opts: Opts = {}  
+
+    if columns is None:
+        columns = {}
+        rename_cols = False
+
+    _created_dummy_cols = set()
+    additional_tables = {}
+    
+    def _get_dummies_and_record(df: pd.DataFrame, cols: list, **kwargs) -> pd.DataFrame:
+        before = set(df.columns)
+        df_after = pd.get_dummies(df, columns=cols, **kwargs)
+        added = set(df_after.columns) - before
+        _created_dummy_cols.update(added)
+        return df_after
+        
+    print(opts)
+    
+    hosp_info = get_hosp_gen_info(cms_root_path)
+    hosp_info = hosp_info[['Facility Name', 'Facility ID', 'State']]
+    hosp_info['Facility ID'] = hosp_info['Facility ID'].astype(str)
+    hosp_info['name_lower'] = hosp_info['Facility Name'].str.lower()
+
+    reg_df = pd.read_csv('state_to_region_map.csv')
+    
+    def _state_to_field(row, field):
+        assert field in ['Region', 'Division']
+        res = reg_df[reg_df['State Code'].str.lower() == row['State'].lower()][field]
+        if len(res) > 0:
+            return res.values[0]
+        else:
+            return f'{field} Not Found'
+
+    def _state_to_region(row):
+        return _state_to_field(row, 'Region')  
+
+        
+    def _state_to_division(row):
+        return _state_to_field(row, 'Division')   
+        
+
+  
+    match opts.get('region_pivot', 'None'):
+        case 'Region':
+            hosp_info['Region'] = hosp_info.apply(_state_to_region, axis=1)
+            hosp_info['Region Unencoded'] = hosp_info['Region']
+            hosp_info = _get_dummies_and_record(hosp_info, cols=['Region'], drop_first=True, dtype=int)
+        case 'Division':
+            hosp_info['Region'] = hosp_info.apply(_state_to_division, axis=1)
+            hosp_info['Region Unencoded'] = hosp_info['Region']
+            hosp_info = _get_dummies_and_record(hosp_info, cols=['Region'], drop_first=True, dtype=int)
+        case _:
+            pass
+
+    if opts.get('healthcare_system_pivot'):
+        # validate opts
+        small_cutoff = opts.get('healthcare_system_pivot_small_system_size_cutoff')
+        bins_opt = opts.get('healthcare_system_bins')
+        if (not small_cutoff and not bins_opt) or (small_cutoff and bins_opt):
+            raise ValueError(
+                "if healthcare_system_pivot is true, then you must pass an int for "
+                "healthcare_system_pivot_small_system_size_cutoff OR a list of ints for healthcare_system_bins (but not both)"
+            )
+
+        sys_df = get_healthcare_system()
+        sys_df['health_sys_id'] = sys_df['health_sys_id'].fillna('Not in a Hospital System')
+        sys_df_vals = sys_df['health_sys_id'].value_counts()
+
+        if small_cutoff:
+            # collapse small systems into 'Small Hospital System' category
+            sys_df['health_sys_id'] = sys_df['health_sys_id'].apply(
+                lambda x: 'Small Hospital System' if sys_df_vals.get(x, 0) < small_cutoff else x
+            )
+            sys_df = sys_df[['ccn', 'health_sys_id']].copy()
+            sys_df = _get_dummies_and_record(sys_df, cols=['health_sys_id'], drop_first=True, dtype=int)
+        else:
+            bin_list = list(opts.get('healthcare_system_bins')) #+ [200, 5000]
+            # get value counts per id, create bins
+            counts = sys_df['health_sys_id'].value_counts()
+                # binned = pd.cut(counts, bins=bin_list)
+            # convert to string series index by health_sys_id
+                # binned = pd.series(binned.astype(str), index=counts.index)
+            # special-case the 'not in a hospital system' label: keep as-is
+            # Build mapping from id -> bin label
+            # sys_df['health_system_size'] = sys_df['health_sys_id'].apply(lambda x: binned.get(x, 'Not in a Hospital System'))
+            sys_df['health_system_size'] = sys_df['health_sys_id'].apply(lambda x: counts.get(x, 0) if x != 'Not in a Hospital System' else 0)
+            sys_df = sys_df[['ccn', 'health_system_size', 'health_sys_id']].copy()
+            # return sys_df
+            # sys_df = _get_dummies_and_record(sys_df, cols=['health_system_size'], dtype=int)
+
+        # merge into hosp_info; ensure the ccns are strings
+        sys_df = sys_df.rename(columns=lambda c: str(c))  # defensive
+        hosp_info = pd.merge(hosp_info, sys_df, left_on='Facility ID', right_on='ccn', how='left')
+        
+    bridge = get_bridge_file()
+    bridge['name_lower'] = bridge['name'].str.lower().fillna('')
+    bridge['ein'] = bridge['ein'].astype(str)
+    bridge.columns = bridge.columns.map(lambda x: str(x) + " - bridge")
+    
+    hosp_info = pd.merge(hosp_info,
+                         bridge,
+                         left_on = 'name_lower',
+                         right_on = 'name_lower - bridge',
+                         how = 'left')
+    
+    form_990 = pd.read_csv('form_990_processed.csv')
+    df_990_cleaned = clean_990(form_990, tax_year, min_hospital_rev, max_hospital_rev)
+    df_990_cleaned['ein'] = df_990_cleaned['ein'].astype(str)
+    df_990_cleaned.columns = df_990_cleaned.columns.map(lambda x: str(x) + " - 990")
+
+    
+    hosp_info = pd.merge(hosp_info,
+                         df_990_cleaned,
+                         left_on=['ein - bridge', 'State'],
+                         right_on = ['ein - 990', 'state - 990'])
+
+    if incentive_perc_limit is not None:
+        hosp_info = hosp_info[hosp_info['incentive_perc - 990'] <= incentive_perc_limit]
+    
+    
+    hcahps = get_hcahps(cms_root_path)
+    hcahps['name_lower'] = hcahps['Facility Name'].str.lower().fillna('')
+    hcahps['Facility ID'] = hcahps['Facility ID'].astype(str)
+    hcahps.columns = hcahps.columns.map(lambda x: str(x) + " - HCAHPS")
+    hosp_info = pd.merge(hosp_info,
+                         hcahps,
+                         left_on = 'Facility ID',
+                         right_on = 'Facility ID - HCAHPS',
+                         how = 'left')
+
+    
+    comp_mort = get_comp_mort(cms_root_path)
+    comp_mort['Facility ID'] = comp_mort['Facility ID'].astype(str)
+    comp_mort.columns = comp_mort.columns.map(lambda x: str(x) + " - complications and mortality report")
+    hosp_info = pd.merge(hosp_info,
+                      comp_mort,
+                      right_on = 'Facility ID - complications and mortality report',
+                      left_on = 'Facility ID',
+                      how = 'left')
+
+    
+    cost_report = get_cost_report(cost_report_path)
+    cost_report['ccn'] = cost_report['Provider CCN'].astype(str)
+    cost_report['is_teaching_hospital'] = (cost_report['Number of Interns and Residents (FTE)'] > 0).astype(int)
+    cost_report.columns = cost_report.columns.map(lambda x: str(x) + " - cost report")
+    hosp_info = pd.merge(hosp_info,
+                         cost_report,
+                         left_on = 'ccn',
+                         right_on = 'ccn - cost report',
+                         )
+    
+    
+    merged = hosp_info.copy()
+
+    # Build filename using the function arguments (not undefined globals)
+    fname = f'merged_dataset_year={tax_year}_cmsYear=2022_minRev={min_hospital_rev}_maxRev={max_hospital_rev}'
+
+    # Save raw merged
+    merged.to_csv(f'{fname}_raw.csv', index=False)
+
+    # If user provided a columns mapping, make sure to keep the dummy columns we created.
+    # We default to mapping dummy columns to themselves (so they survive selection).
+    if columns is not None:
+        # if columns maps original multi-source names to friendly names, we want dummies preserved.
+        for dummy_col in sorted(_created_dummy_cols):
+            if dummy_col not in columns:
+                # preserve it with identity mapping
+                columns[dummy_col] = dummy_col
+
+        # rename columns according to mapping (only affects names present)
+        merged = merged.rename(columns=columns)
+
+    # If columns is None (rename_cols False), just write full CSV and return the merged raw.
+    if not rename_cols:
+        merged.to_csv(f'{fname}.csv', index=False)
+        return merged
+
+    # else, select only the desired columns (the values of the mapping are the desired output column names)
+    desired_cols = list(columns.values())
+    # keep only requested columns that actually exist (defensive)
+    existing_desired_cols = [c for c in desired_cols if c in merged.columns]
+    missing = set(desired_cols) - set(existing_desired_cols)
+    if missing:
+        # warn user (do not fail) — printing is fine in your environment
+        print(f"Warning: requested columns missing from merged dataframe and will be skipped: {sorted(list(missing))}")
+
+    reduced = merged[existing_desired_cols].copy()
+    reduced.to_csv(f'{fname}.csv', index=False)
+    return reduced

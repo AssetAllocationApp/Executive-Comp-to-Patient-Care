@@ -207,3 +207,8 @@ marimo/_lsp/
 __marimo__/
 
 data/
+EDA/
+load/
+processed/
+results/
+*.csv

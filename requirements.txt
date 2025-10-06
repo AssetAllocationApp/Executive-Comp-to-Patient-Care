@@ -1,0 +1,10 @@
+jupyter
+jupyterlab-vim
+pandas
+numpy
+matplotlib
+seaborn
+requests
+tqdm
+scipy
+statsmodels
