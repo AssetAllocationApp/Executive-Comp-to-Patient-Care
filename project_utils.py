@@ -431,6 +431,7 @@ def join_datasets(
     cost_report_path,
     bridge_file_path,
     columns=None,
+    skip_bridge_and_990=False,
     opts: Opts = None,
     incentive_perc_limit: Optional[int] = None,
 ):
@@ -455,6 +456,8 @@ def join_datasets(
     print(opts)
 
     hosp_info = get_hosp_gen_info(cms_root_path)
+    print(f"num records in cms dataset: {len(hosp_info)}")
+
     hosp_info = hosp_info[["Facility Name", "Facility ID", "State"]]
     hosp_info["Facility ID"] = hosp_info["Facility ID"].astype(str)
     hosp_info["name_lower"] = hosp_info["Facility Name"].str.lower()
@@ -524,18 +527,10 @@ def join_datasets(
             bin_list = list(opts.get("healthcare_system_bins"))
             # get value counts per id, create bins
             counts = sys_df["health_sys_id"].value_counts()
-            # binned = pd.cut(counts, bins=bin_list)
-            # convert to string series index by health_sys_id
-            # binned = pd.series(binned.astype(str), index=counts.index)
-            # special-case the 'not in a hospital system' label: keep as-is
-            # Build mapping from id -> bin label
-            # sys_df['health_system_size'] = sys_df['health_sys_id'].apply(lambda x: binned.get(x, 'Not in a Hospital System'))
             sys_df["health_system_size"] = sys_df["health_sys_id"].apply(
                 lambda x: counts.get(x, 0) if x != "Not in a Hospital System" else 0
             )
             sys_df = sys_df[["ccn", "health_system_size", "health_sys_id"]].copy()
-            # return sys_df
-            # sys_df = _get_dummies_and_record(sys_df, cols=['health_system_size'], dtype=int)
 
         # merge into hosp_info; ensure the ccns are strings
         sys_df = sys_df.rename(columns=lambda c: str(c))  # defensive
@@ -543,58 +538,70 @@ def join_datasets(
             hosp_info, sys_df, left_on="Facility ID", right_on="ccn", how="left"
         )
 
-    bridge = pd.read_csv(bridge_file_path)
-    bridge["name_lower"] = bridge["name"].str.lower().fillna("")
-    bridge["ein"] = bridge["ein"].astype(str)
-    bridge.columns = bridge.columns.map(lambda x: str(x) + " - bridge")
+    if not skip_bridge_and_990:
+        bridge = pd.read_csv(bridge_file_path)
+        bridge["name_lower"] = bridge["name"].str.lower().fillna("")
+        bridge["ein"] = bridge["ein"].astype(str)
+        bridge.columns = bridge.columns.map(lambda x: str(x) + " - bridge")
+        print(f"num records in bridge file: {len(bridge)}")
 
-    hosp_info = pd.merge(
-        hosp_info,
-        bridge,
-        left_on="name_lower",
-        right_on="name_lower - bridge",
-        how="left",
-    )
+        hosp_info = pd.merge(
+            hosp_info,
+            bridge,
+            left_on="name_lower",
+            right_on="name_lower - bridge",
+            how="left",
+        )
+        print(f"num records in hosp info after merging with bridge file: {len(hosp_info)}")
 
-    form_990 = pd.read_csv("form_990_processed.csv")
-    df_990_cleaned = clean_990(form_990, tax_year, min_hospital_rev, max_hospital_rev)
-    df_990_cleaned["ein"] = df_990_cleaned["ein"].astype(str)
-    df_990_cleaned.columns = df_990_cleaned.columns.map(lambda x: str(x) + " - 990")
+        form_990 = pd.read_csv("form_990_processed.csv")
+        df_990_cleaned = clean_990(form_990, tax_year, min_hospital_rev, max_hospital_rev)
+        df_990_cleaned["ein"] = df_990_cleaned["ein"].astype(str)
+        df_990_cleaned.columns = df_990_cleaned.columns.map(lambda x: str(x) + " - 990")
+        print(f"num records in 990 cleaned: {len(df_990_cleaned)}")
 
-    hosp_info = pd.merge(
-        hosp_info,
-        df_990_cleaned,
-        left_on=["ein - bridge", "State"],
-        right_on=["ein - 990", "state - 990"],
-    )
+        hosp_info = pd.merge(
+            hosp_info,
+            df_990_cleaned,
+            left_on=["ein - bridge", "State"],
+            right_on=["ein - 990", "state - 990"],
+        )
+        print(f"num records in hosp info after merging with 990 data: {len(hosp_info)}")
 
-    if incentive_perc_limit is not None:
-        hosp_info = hosp_info[hosp_info["incentive_perc - 990"] <= incentive_perc_limit]
+        if incentive_perc_limit is not None:
+            hosp_info = hosp_info[hosp_info["incentive_perc - 990"] <= incentive_perc_limit]
+        print(f"num records in hosp info after filtering for incentive %: {len(hosp_info)}")
 
     hcahps = get_hcahps(cms_root_path)
     hcahps["name_lower"] = hcahps["Facility Name"].str.lower().fillna("")
     hcahps["Facility ID"] = hcahps["Facility ID"].astype(str)
     hcahps.columns = hcahps.columns.map(lambda x: str(x) + " - HCAHPS")
+    print(f"num records in hcahps dataset: {len(hcahps)}")
+
     hosp_info = pd.merge(
         hosp_info,
         hcahps,
         left_on="Facility ID",
         right_on="Facility ID - HCAHPS",
-        how="left",
+        # how="left",
     )
+    print(f"num records in hospital info after merging with hcahps dataset: {len(hosp_info)}")
 
     comp_mort = get_comp_mort(cms_root_path)
     comp_mort["Facility ID"] = comp_mort["Facility ID"].astype(str)
     comp_mort.columns = comp_mort.columns.map(
         lambda x: str(x) + " - complications and mortality report"
     )
+    print(f"num records in comp_mort dataset: {len(comp_mort)}")
+
     hosp_info = pd.merge(
         hosp_info,
         comp_mort,
         right_on="Facility ID - complications and mortality report",
         left_on="Facility ID",
-        how="left",
+        # how="left",
     )
+    print(f"num records in hospital info after merging with comp_mort dataset {len(hosp_info)}")
 
     cost_report = get_cost_report(cost_report_path)
     cost_report["ccn"] = cost_report["Provider CCN"].astype(str)
@@ -602,13 +609,15 @@ def join_datasets(
         cost_report["Number of Interns and Residents (FTE)"] > 0
     ).astype(int)
     cost_report.columns = cost_report.columns.map(lambda x: str(x) + " - cost report")
+    print(f"num records in cost report dataset: {len(cost_report)}")
+
     hosp_info = pd.merge(
         hosp_info,
         cost_report,
         left_on="ccn",
         right_on="ccn - cost report",
     )
-
+    print(f"num records in hosp_info after merging with cost report: {len(hosp_info)}")
     merged = hosp_info.copy()
 
     # Build filename using the function arguments (not undefined globals)
