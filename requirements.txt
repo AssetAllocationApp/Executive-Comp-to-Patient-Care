@@ -1,5 +1,7 @@
 jupyter
 jupyterlab-vim
+black
+isort
 pandas
 numpy
 matplotlib
@@ -8,3 +10,4 @@ requests
 tqdm
 scipy
 statsmodels
+seaborn

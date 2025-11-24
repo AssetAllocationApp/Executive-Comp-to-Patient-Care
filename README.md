@@ -23,8 +23,8 @@ First, there is one dataset that must be manually downloaded:
 ### Dev Container
 I do not have vscode so I run everything through the devcontainer CLI (https://github.com/devcontainers/cli)
 
-1. `devcontainer up --id-label "exec-comp" --workspace-folder .`
-2. `devcontainer exec --id-label "exec-comp" --workspace-folder . jupyter lab`
+1. `devcontainer up --id-label "exec-comp" --workspace-folder .` (creates the containers)
+2. `devcontainer exec --id-label "exec-comp" --workspace-folder . jupyter lab --allow-root` (enters the container and starts the notebook)
 
 ## Notebooks
 **1. Download datasets.ipynb** Run this to download all required datasets. This should take up ~30GB
@@ -38,5 +38,6 @@ I do not have vscode so I run everything through the devcontainer CLI (https://g
 # Datasets
 
 All datasets are automatically downloaded except for state-to-region map (included in this repo) and the hospital compendium file, which must be downloaded manually. 
-Manually Download the hospital systems compendium file.
+
+To downlowd the hospital systems compendium file, go to https://www.ahrq.gov/chsp/data-resources/compendium-2022.html, download the csv file under 'Hospital Linkage File', rename it to `health_system.csv` and place it in the data folder. 
 
