@@ -97,20 +97,24 @@ def download_990s(bulk_urls, zip_path, extract_path):
 
 def get_cms_data(cms_url, zip_path, extract_path, cms_dataset_id, force=False):
 
+    download_dest = os.path.join(zip_path, cms_dataset_id + ".zip")
+
+    skip_download = os.path.exists(download_dest)
+    skip_extraction = os.path.exists(extract_path)
+
     if not os.path.exists(zip_path):
         os.makedirs(zip_path)
 
     if not os.path.exists(extract_path):
         os.makedirs(extract_path)
 
-    download_dest = os.path.join(zip_path, cms_dataset_id + ".zip")
-    if not os.path.exists(download_dest) or force:
+    if not skip_download or force:
         print(f"downloading {cms_url} to {download_dest}...")
         download(cms_url, download_dest)
     else:
         print(f"{download_dest} already exists. Skipping download")
 
-    if not os.path.exists(extract_path) or force:
+    if not skip_extraction or force:
         print(f"unzipping {download_dest} to {extract_path}...")
         with zipfile.ZipFile(download_dest, "r") as z:
             for member in tqdm(z.namelist()):

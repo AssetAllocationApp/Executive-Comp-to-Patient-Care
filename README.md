@@ -48,10 +48,10 @@ To reproduce the project, run each of these jupyter notebooks in order.
 
 ### 1. Download datasets.ipynb
 
-Run this to download all required datasets. This should take up ~30GB
+Run this to download all required datasets. This should take up ~30GB and about 20 minutes to download.
 
 ### 2. Clean 990 dataset.ipynb 
-Convert 990 forms from xml filer to csv files. Please note that this may take 30+ minutes depending on your hardware
+Convert 990 forms from xml filer to csv files. Please note that this may take 60+ minutes depending on your hardware
 
 ### 3. EDA.ipynb 
 Generates some basic figures (e.g. histograms)
@@ -67,7 +67,9 @@ The following datasets are used in this project:
     b. field names for form 990: https://www.irs.gov/pub/irs-tege/2022form990withfieldnames.pdf
 2. CMS hospital dataset: https://data.cms.gov/provider-data/archived-data/hospitals
     a. This project uses hospitals_10_2022.zip
-3. Linkage file mapping 990 EIN to CMS: https://www.ahrq.gov/chsp/data-resources/compendium-2022.html
-4. state to region map: https://www.kaggle.com/datasets/omer2040/usa-states-to-region
+3. CMS Hospital cost report: https://data.cms.gov/provider-compliance/cost-report/hospital-provider-cost-report
+4. Health system compendium: https://www.ahrq.gov/chsp/data-resources/compendium-2022.html
+5. Linkage file mapping 990 EIN to CMS: https://www.communitybenefitinsight.org/?page=info.data_api
+6. state to region map: https://www.kaggle.com/datasets/omer2040/usa-states-to-region
 
 
