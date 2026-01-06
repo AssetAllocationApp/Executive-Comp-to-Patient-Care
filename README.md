@@ -62,14 +62,14 @@ Run all the regression models used in the project. Results are saved to `./resul
 # Datasets
 
 The following datasets are used in this project:
-1. IRS 990 dataset
-    a. link to dataset: https://www.irs.gov/statistics/soi-tax-stats-annual-extract-of-tax-exempt-organization-financial-data
-    b. field names for form 990: https://www.irs.gov/pub/irs-tege/2022form990withfieldnames.pdf
-2. CMS hospital dataset: https://data.cms.gov/provider-data/archived-data/hospitals
-    a. This project uses hospitals_10_2022.zip
-3. CMS Hospital cost report: https://data.cms.gov/provider-compliance/cost-report/hospital-provider-cost-report
-4. Health system compendium: https://www.ahrq.gov/chsp/data-resources/compendium-2022.html
-5. Linkage file mapping 990 EIN to CMS: https://www.communitybenefitinsight.org/?page=info.data_api
-6. state to region map: https://www.kaggle.com/datasets/omer2040/usa-states-to-region
+- IRS 990 dataset
+    - link to dataset: https://www.irs.gov/statistics/soi-tax-stats-annual-extract-of-tax-exempt-organization-financial-data
+    - field names for form 990: https://www.irs.gov/pub/irs-tege/2022form990withfieldnames.pdf
+- CMS hospital dataset: https://data.cms.gov/provider-data/archived-data/hospitals
+    - This project uses hospitals_10_2022.zip
+- CMS Hospital cost report: https://data.cms.gov/provider-compliance/cost-report/hospital-provider-cost-report
+- Health system compendium: https://www.ahrq.gov/chsp/data-resources/compendium-2022.html
+- Linkage file mapping 990 EIN to CMS: https://www.communitybenefitinsight.org/?page=info.data_api
+- State to region map: https://www.kaggle.com/datasets/omer2040/usa-states-to-region
 
 
